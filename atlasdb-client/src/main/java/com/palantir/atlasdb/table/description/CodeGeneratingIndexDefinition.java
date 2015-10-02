@@ -28,16 +28,16 @@ import com.palantir.atlasdb.transaction.api.ConflictHandler;
 /**
  * Defines a secondary index for a schema.
  *
- * Can be thought of as a builder for {@link IndexMetadata} objects.
+ * Can be thought of as a builder for {@link DefaultIndexMetadata} objects.
  */
-public class IndexDefinition extends AbstractDefinition {
+public class CodeGeneratingIndexDefinition extends AbstractDefinition implements IndexDefinition {
 
     @Override
     protected ConflictHandler defaultConflictHandler() {
         return ConflictHandler.IGNORE_ALL;
     }
 
-    public IndexDefinition(IndexType indexType) {
+    public CodeGeneratingIndexDefinition(IndexType indexType) {
         this.indexType = indexType;
     }
 
@@ -45,7 +45,7 @@ public class IndexDefinition extends AbstractDefinition {
         sourceTableName = tableName;
     }
 
-    public String getSourceTable() {
+	public String getSourceTable() {
         return sourceTableName;
     }
 
@@ -144,11 +144,11 @@ public class IndexDefinition extends AbstractDefinition {
         rangeScanAllowed = true;
     }
 
-    public boolean isRangeScanAllowed() {
+	public boolean isRangeScanAllowed() {
         return rangeScanAllowed;
     }
 
-    public boolean isDbCompressionRequested(){
+	public boolean isDbCompressionRequested(){
         return true; //Compress indexes by default
     }
 
@@ -156,11 +156,12 @@ public class IndexDefinition extends AbstractDefinition {
         negativeLookups = true;
     }
 
-    public boolean hasNegativeLookups() {
+	public boolean hasNegativeLookups() {
         return negativeLookups;
     }
 
-    public int getMaxValueSize() {
+    @Override
+	public int getMaxValueSize() {
         // N.B., indexes are always max value size of 1.
         return 1;
     }
@@ -173,7 +174,7 @@ public class IndexDefinition extends AbstractDefinition {
         this.javaIndexTableName = name;
     }
 
-    public String getJavaTableName() {
+	public String getJavaTableName() {
         return javaIndexTableName;
     }
 
@@ -185,7 +186,8 @@ public class IndexDefinition extends AbstractDefinition {
         return indexCondition;
     }
 
-    public IndexType getIndexType() {
+    @Override
+	public IndexType getIndexType() {
         return indexType;
     }
 
@@ -219,12 +221,13 @@ public class IndexDefinition extends AbstractDefinition {
         DEFINING_COLUMN_COMPONENTS
     }
 
-    public IndexMetadata toIndexMetadata(String indexTableName) {
+    @Override
+	public DefaultIndexMetadata toIndexMetadata(String indexTableName) {
         Preconditions.checkState(indexTableName != null, "No index table name specified.");
         Preconditions.checkState(!rowComponents.isEmpty(), "No row components specified.");
 
         if (colComponents.isEmpty()) {
-            return IndexMetadata.createIndex(
+            return DefaultIndexMetadata.createIndex(
                     indexTableName,
                     javaIndexTableName,
                     rowComponents,
@@ -239,7 +242,7 @@ public class IndexDefinition extends AbstractDefinition {
                     sweepStrategy,
                     expirationStrategy);
         } else {
-            return IndexMetadata.createDynamicIndex(
+            return DefaultIndexMetadata.createDynamicIndex(
                     indexTableName,
                     javaIndexTableName,
                     rowComponents,

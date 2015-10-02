@@ -37,6 +37,7 @@ import com.palantir.atlasdb.table.description.NameComponentDescription;
 import com.palantir.atlasdb.table.description.NameMetadataDescription;
 import com.palantir.atlasdb.table.description.NamedColumnDescription;
 import com.palantir.atlasdb.table.description.TableMetadata;
+import com.palantir.atlasdb.table.description.DefaultTableMetadata;
 import com.palantir.atlasdb.table.description.ValueType;
 import com.palantir.atlasdb.transaction.api.ConflictHandler;
 import com.palantir.common.base.FunctionCheckedException;
@@ -53,7 +54,7 @@ public final class CassandraTimestampBoundStore implements TimestampBoundStore {
 
 
     private static final String TIMESTAMP_TABLE = "_timestamp";
-    public static final TableMetadata TIMESTAMP_TABLE_METADATA = new TableMetadata(
+    public static final TableMetadata TIMESTAMP_TABLE_METADATA = new DefaultTableMetadata(
         new NameMetadataDescription(ImmutableList.of(new NameComponentDescription("timestamp_name", ValueType.STRING))),
         new ColumnMetadataDescription(ImmutableList.of(
             new NamedColumnDescription(ROW_AND_COLUMN_NAME, "current_max_ts", ColumnValueDescription.forType(ValueType.FIXED_LONG)))),

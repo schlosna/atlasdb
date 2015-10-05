@@ -1,0 +1,102 @@
+/**
+ * Copyright 2015 Palantir Technologies
+ *
+ * Licensed under the BSD-3 License (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://opensource.org/licenses/BSD-3-Clause
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.palantir.timestamp;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.junit.Test;
+
+import com.palantir.common.concurrent.PTExecutors;
+
+public class RateLimitedTimestampServiceTest {
+    @Test
+    public void testRateLimiting() throws Exception {
+        final long MIN_REQUEST_MILLIS = 100L;
+        final long TEST_DURATION_MILLIS = 2000L;
+        final int NUM_THREADS = 3;
+
+        final StatsTrackingTimestampService rawTs = new StatsTrackingTimestampService(new InMemoryTimestampService());
+        final RateLimitedTimestampService cachedTs = new RateLimitedTimestampService(rawTs, MIN_REQUEST_MILLIS);
+        final AtomicLong timestampsGenerated = new AtomicLong(0);
+        final long startMillis = System.currentTimeMillis();
+
+        ExecutorService executor = PTExecutors.newCachedThreadPool();
+        try {
+            for (int i = 0; i < NUM_THREADS; ++i) {
+                executor.submit(new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        while (System.currentTimeMillis() - startMillis < TEST_DURATION_MILLIS) {
+                            cachedTs.getFreshTimestamp();
+                            timestampsGenerated.incrementAndGet();
+                        }
+                        return null;
+                    }
+                });
+            }
+        } finally {
+            executor.shutdown();
+            executor.awaitTermination(1000, TimeUnit.SECONDS);
+        }
+
+        long finishMillis = System.currentTimeMillis();
+
+        double millisPerRequest = (double)(finishMillis - startMillis) / rawTs.getFreshTimestampsReqCount.get();
+        System.out.println("Calls made: " + rawTs.getFreshTimestampsReqCount.get());
+        System.out.println("Time per request: " + millisPerRequest + " ms");
+        System.out.println("Timestamps generated: " + timestampsGenerated.get());
+
+        assertEquals(0, rawTs.getFreshTimestampReqCount.get());
+        assertApproximatelyEqual(rawTs.getFreshTimestampsReqCount.get() * NUM_THREADS, timestampsGenerated.get());
+    }
+
+    private void assertApproximatelyEqual(double expected, double actual) {
+        assertTrue("expected: " + expected + ", actual: " + actual,
+                Math.abs(expected - actual) < expected);
+    }
+
+    private static class StatsTrackingTimestampService implements TimestampService {
+        AtomicLong getFreshTimestampReqCount = new AtomicLong(0);
+        AtomicLong getFreshTimestampsReqCount = new AtomicLong(0);
+        AtomicLong timestampsCount = new AtomicLong(0);
+
+        final TimestampService delegate;
+
+        public StatsTrackingTimestampService(TimestampService delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public long getFreshTimestamp() {
+            getFreshTimestampReqCount.incrementAndGet();
+            timestampsCount.incrementAndGet();
+            return delegate.getFreshTimestamp();
+        }
+
+        @Override
+        public TimestampRange getFreshTimestamps(int numTimestampsRequested) {
+            getFreshTimestampsReqCount.incrementAndGet();
+            timestampsCount.addAndGet(numTimestampsRequested);
+            return delegate.getFreshTimestamps(numTimestampsRequested);
+        }
+    }
+}
